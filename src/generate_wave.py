@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from src import image_size
+from src import device, image_size
 
 
 def _wavevector(angle_math, wavelength):
@@ -24,11 +24,10 @@ def _get_current_phase(phase: float, period: float, timestep: float = 0):
 def generate_wave(resolution_px_per_km: float,
                         resolution_seconds_per_time_step: float,
                         timestep: int, angle, wavelength, amplitude, phase, period, img_shape: tuple[int, int] = image_size):
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # Add device=device to the linspace creations
-    x = torch.linspace(0, img_shape[1] - 1, img_shape[1], dtype=torch.float32, device=device)
-    y = torch.linspace(0, img_shape[0] - 1, img_shape[0], dtype=torch.float32, device=device)
+    y = torch.linspace(0, img_shape[0] - 1, img_shape[0], dtype=torch.float32) # , device=device)
+    x = torch.linspace(0, img_shape[1] - 1, img_shape[1], dtype=torch.float32) # , device=device)
     x_grid, y_grid = torch.meshgrid(x, y, indexing='xy')
 
     # Get wave vector
