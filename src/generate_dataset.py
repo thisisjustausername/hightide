@@ -35,16 +35,16 @@ def generate_wave_dataset(num_samples: int):
     dataset = [generate_wave(**dataset_parameters) for _ in tqdm(range(num_samples))]
     return dataset
 
-def save_dataset(data, filename: str, format: list[Literal['pickle', 'png']]):
-    if 'pickle' in format:
-        with open(f'datasets/{filename}.pkl', 'wb') as f:
-            pickle.dump(data, f)
-    if 'png' in format:
-        os.mkdir(f'datasets/{filename}')
-        for i in range(len(data)):
-            save(data[i], f'datasets/{filename}/{i}.png')
+def save_dataset(data, folder_name: str): # , format: list[Literal['pickle', 'png']]):
+    os.mkdir(f'datasets/{folder_name}')
+    # if 'pickle' in format:
+    with open(f'datasets/{folder_name}/tensors.pkl', 'wb') as f:
+        pickle.dump(data, f)
+    # if 'png' in format:
+    for i in range(len(data)):
+        save(data[i], f'datasets/{folder_name}/{i}.png')
 
 if __name__ == "__main__":
     # Generate a wave image dataset
     data = generate_wave_dataset(100_000)
-    save_dataset(data, 'wave_dataset', ['pickle', 'png'])
+    save_dataset(data, 'wave_dataset')
