@@ -37,7 +37,7 @@ def generate_wave_dataset(num_samples: int):
 
 def save_dataset(data, filename: str, format: list[Literal['pickle', 'png']]):
     if 'pickle' in format:
-        with open(f'{filename}.{format}', 'wb') as f:
+        with open(f'datasets/{filename}.pkl', 'wb') as f:
             pickle.dump(data, f)
     if 'png' in format:
         os.mkdir(f'datasets/{filename}')
