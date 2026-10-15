@@ -3,7 +3,7 @@ import os
 import pickle
 import threading
 from concurrent.futures import ThreadPoolExecutor
-import queue
+from tqdm import tqdm
 import numpy as np
 
 from src.generate_dataset import save
@@ -66,7 +66,7 @@ def on_done(future):
         print(f"Error in thread: {future.exception()}")
 
 with ThreadPoolExecutor(max_workers=32) as pool:
-    for index in range(num_samples):
+    for index in tqdm(range(num_samples)):
         sample = result_queue.get()
         sephamore.acquire()
         pool.submit(save_sample, sample, index, 'normalize', None).add_done_callback(on_done)
