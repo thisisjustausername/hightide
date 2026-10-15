@@ -17,7 +17,8 @@ def worker(wave_generator, num_waves: int | tuple[int, int], num_samples_per_wor
     np.random.seed(gen_seed.generate_state(1)[0])
     if isinstance(num_waves, tuple):
         rng = np.random.default_rng(count_seed)
-        num_waves = lambda : int(rng.integers(num_waves[0], num_waves[1])) # type: ignore
+        nw = num_waves
+        num_waves = lambda : int(rng.integers(nw[0], nw[1])) # type: ignore
     wave_collection = WaveCollection(wave_generator, num_waves) # type: ignore
     for _ in range(num_samples_per_worker):
         result_queue.put(wave_collection.create())
