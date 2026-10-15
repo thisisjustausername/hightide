@@ -15,7 +15,6 @@ os.mkdir(f'datasets/{folder_name}')
 def worker(wave_generator, num_waves: int | tuple[int, int], num_samples_per_worker, seed, result_queue) -> None:
     gen_seed, count_seed = seed.spawn(2)
     np.random.seed(gen_seed.generate_state(1)[0])
-    wave_generator.reseed(gen_seed)
     if isinstance(num_waves, tuple):
         rng = np.random.default_rng(count_seed)
         num_waves = lambda : int(rng.integers(num_waves[0], num_waves[1])) # type: ignore
