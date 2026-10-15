@@ -23,12 +23,12 @@ def worker(wave_generator, num_waves: int | tuple[int, int], num_samples_per_wor
     for _ in range(num_samples_per_worker):
         result_queue.put(wave_collection.create())
 
-def save_sample(sample, index, scale, match_range):
-
-        os.mkdir(f'datasets/{folder_name}/{index}')
-        with open(f'datasets/{folder_name}/{index}/tensors_{index}.pkl', 'wb') as f:
+def save_sample(sample, idx, scale, match_range):
+        print(idx)
+        os.mkdir(f'datasets/{folder_name}/{idx}')
+        with open(f'datasets/{folder_name}/{idx}/tensors_{idx}.pkl', 'wb') as f:
             pickle.dump(sample, f)
-        save(wave_series=sample[1], path=f'datasets/{folder_name}/{index}', scale=scale, match_range=match_range) # type: ignore
+        save(wave_series=sample[1], path=f'datasets/{folder_name}/{idx}', scale=scale, match_range=match_range) # type: ignore
 
 ctx = multiprocessing.get_context('fork')
 result_queue = ctx.Queue(maxsize=10_000)
