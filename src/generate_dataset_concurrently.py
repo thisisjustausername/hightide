@@ -24,7 +24,6 @@ def worker(wave_generator, num_waves: int | tuple[int, int], num_samples_per_wor
         result_queue.put(wave_collection.create())
 
 def save_sample(sample, idx, scale, match_range):
-        print(idx)
         os.mkdir(f'datasets/{folder_name}/{idx}')
         with open(f'datasets/{folder_name}/{idx}/tensors_{idx}.pkl', 'wb') as f:
             pickle.dump(sample, f)
@@ -67,17 +66,10 @@ def on_done(future):
         print(f"Error in thread: {future.exception()}")
 
 with ThreadPoolExecutor(max_workers=32) as pool:
-    while True:
-        try:
-            for index in range(num_samples):
-                sample = result_queue.get()
-                sephamore.acquire()
-                pool.submit(save_sample, sample, index, 'normalize', None).add_done_callback(on_done)
-                del sample
-                break
-        except queue.Empty:
-            if any(p.exitcode not in (None, 0) for p in processes):
-                raise RuntimeError("a worker process died")
-            break
+    for index in range(num_samples):
+        sample = result_queue.get()
+        sephamore.acquire()
+        pool.submit(save_sample, sample, index, 'normalize', None).add_done_callback(on_done)
+        del sample
 for p in processes:
     p.join()
