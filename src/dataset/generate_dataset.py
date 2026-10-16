@@ -12,16 +12,15 @@ from copy import copy
 from typing import Literal, overload
 
 import numpy as np
-from torch import Tensor
-from tqdm import tqdm
-
 from src import image_size
-from src.generate_wave import (
+from src.dataset.generate_wave import (
     WaveCollection,
     WaveGenerator,
     WaveParams,
     save,
 )
+from torch import Tensor
+from tqdm import tqdm
 
 # create single wave generator
 single_wave_generator = WaveGenerator(

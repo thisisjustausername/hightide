@@ -12,5 +12,5 @@ uv pip install -r requirements.txt
 # Generate Dataset
 To generate the dataset containing timeseries of overlapping waves, run following command.
 ```bash
-python3 -m src.generate_dataset
+python3 -m src.dataset.generate_dataset
 ```

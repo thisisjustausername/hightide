@@ -12,12 +12,9 @@ from typing import Literal, NotRequired, TypedDict, overload
 
 import torch
 from PIL import Image
+from src import image_size
 from torch import Tensor
 from tqdm import tqdm
-
-from src import image_size
-
-# TODO: test timeseries
 
 
 def _wavevector(angle_math: float, wavelength: float) -> tuple[float, float]:
