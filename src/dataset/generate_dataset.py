@@ -12,6 +12,7 @@ from copy import copy
 from typing import Literal, overload
 
 import numpy as np
+import src.parameters as params
 from src import image_size
 from src.dataset.generate_wave import (
     WaveCollection,
@@ -160,12 +161,12 @@ def save_dataset(
     Returns:
         None
     """
-    os.mkdir(f'datasets/{folder_name}')
-    with open(f'datasets/{folder_name}/tensors.pkl', 'wb') as f:
+    os.mkdir(os.path.join(params.dataset_base_path, folder_name))
+    with open(os.path.join(params.dataset_base_path, f'{folder_name}/tensors.pkl'), 'wb') as f:
         pickle.dump(data, f)
     for i in tqdm(range(len(data))):
-        os.mkdir(f'datasets/{folder_name}/{i}')
-        save(wave_series=data[i][1], path=f'datasets/{folder_name}/{i}', scale=scale, match_range=match_range) # type: ignore
+        os.mkdir(os.path.join(params.dataset_base_path, f'{folder_name}/{i}'))
+        save(wave_series=data[i][1], path=os.path.join(params.dataset_base_path, f'{folder_name}/{i}'), scale=scale, match_range=match_range) # type: ignore
 
 
 
@@ -213,14 +214,14 @@ def save_batch(
     show = lambda x : tqdm(x) if use_tqdm else x
     for index, d in show(enumerate(data)):
         idx = start_index + index
-        path = f'datasets/{folder_name}/{idx}'
+        path = os.path.join(params.dataset_base_path, f'{folder_name}/{idx}')
         os.mkdir(path)
-        save(wave_series=d[1], path=f'datasets/{folder_name}/{idx}', scale=scale, match_range=match_range) # type: ignore
+        save(wave_series=d[1], path=os.path.join(params.dataset_base_path, f'{folder_name}/{idx}'), scale=scale, match_range=match_range) # type: ignore
         with open(os.path.join(path, 'tensors.pkl'), 'wb') as f:
             pickle.dump(d, f) # save whole d as it contains params and the unnormalized wave tensor
 
 if __name__ == "__main__":
-    os.mkdir('datasets/wave_dataset')
+    os.mkdir(os.path.join(params.dataset_base_path, 'wave_dataset'))
     # Generate a wave image dataset
     data = generate_wave_dataset(
         num_waves = lambda : np.random.randint(1, 5), # randint is uniformly distributed, too
