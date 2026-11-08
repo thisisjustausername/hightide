@@ -1,6 +1,6 @@
 """
 Wave Dataset Generation
-======================
+=======================
 
 This module generates a wave image dataset
 """
@@ -12,6 +12,9 @@ from copy import copy
 from typing import Literal, overload
 
 import numpy as np
+from torch import Tensor
+from tqdm import tqdm
+
 import src.parameters as params
 from src import image_size
 from src.dataset.generate_wave import (
@@ -20,8 +23,6 @@ from src.dataset.generate_wave import (
     WaveParams,
     save,
 )
-from torch import Tensor
-from tqdm import tqdm
 
 # create single wave generator
 single_wave_generator = WaveGenerator(
@@ -113,6 +114,7 @@ def generate_wave_dataset(
             amount, extra = divmod(num_samples, interval_save)
             counts = [interval_save for _ in range(amount)] + ([extra] if extra > 0 else [])
             dataset = []
+            # One batch is 1 instance of the dataset. It contains the specified amount of images in the timeseries.
             for idx, count in tqdm(enumerate(counts), total=len(counts), desc='Create Batches'):
                 batch = [wave_collection.create() for _ in range(count)]
                 save_batch(data=batch, folder_name=folder_name, scale=scale, match_range=match_range, start_index=sum(counts[:idx]), use_tqdm=False) # type: ignore
@@ -162,6 +164,8 @@ def save_dataset(
         None
     """
     os.mkdir(os.path.join(params.dataset_base_path, folder_name))
+    print(type(data[0][0]))
+    raise NotImplementedError("This function is not fully implemented yet as it is missing a clean way for saving params.pkl.")
     with open(os.path.join(params.dataset_base_path, f'{folder_name}/tensors.pkl'), 'wb') as f:
         pickle.dump(data, f)
     for i in tqdm(range(len(data))):
@@ -212,18 +216,20 @@ def save_batch(
         None
     """
     show = lambda x : tqdm(x) if use_tqdm else x
-    for index, d in show(enumerate(data)):
+    for index, (d_params, d) in show(enumerate(data)):
         idx = start_index + index
         path = os.path.join(params.dataset_base_path, f'{folder_name}/{idx}')
         os.mkdir(path)
-        save(wave_series=d[1], path=os.path.join(params.dataset_base_path, f'{folder_name}/{idx}'), scale=scale, match_range=match_range) # type: ignore
+        save(wave_params=d_params, wave_series=d, path=os.path.join(params.dataset_base_path, f'{folder_name}/{idx}'), scale=scale, match_range=match_range) # type: ignore
         with open(os.path.join(path, 'tensors.pkl'), 'wb') as f:
             pickle.dump(d, f) # save whole d as it contains params and the unnormalized wave tensor
+        with open(os.path.join(path, 'params.pkl'), 'wb') as f:
+            pickle.dump(d_params, f) # save params that generated the wave series
 
 if __name__ == "__main__":
     os.mkdir(os.path.join(params.dataset_base_path, 'wave_dataset'))
     # Generate a wave image dataset
-    data = generate_wave_dataset(
+    data: list[tuple[tuple[WaveParams, ...], Tensor]] | list[tuple[WaveParams, Tensor]] = generate_wave_dataset(
         num_waves = lambda : np.random.randint(1, 5), # randint is uniformly distributed, too
         num_samples=100_000,
         interval_save=10_000,
@@ -232,4 +238,4 @@ if __name__ == "__main__":
         scale='normalize',
         return_dataset = False
 )
-    # save_dataset(data, 'wave_dataset', scale='normalize', match_range=None)
+    save_dataset(data, 'wave_dataset', scale='normalize', match_range=None)

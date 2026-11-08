@@ -3,11 +3,12 @@ import os
 import pickle
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from tqdm import tqdm
-import numpy as np
 
-from src.generate_dataset import save
-from src.generate_wave import WaveCollection, WaveGenerator
+import numpy as np
+from tqdm import tqdm
+
+from src.dataset.generate_dataset import save
+from src.dataset.generate_wave import WaveCollection, WaveGenerator
 
 folder_name = 'wave_dataset'
 os.mkdir(f'datasets/{folder_name}')
@@ -25,16 +26,21 @@ def worker(wave_generator, num_waves: int | tuple[int, int], num_samples_per_wor
 
 def save_sample(sample, idx, scale, match_range):
         os.mkdir(f'datasets/{folder_name}/{idx}')
-        with open(f'datasets/{folder_name}/{idx}/tensors_{idx}.pkl', 'wb') as f:
-            pickle.dump(sample, f)
-        save(wave_series=sample[1], path=f'datasets/{folder_name}/{idx}', scale=scale, match_range=match_range) # type: ignore
+        d_params = sample[0]
+        data = sample[1]
+        with open(f'datasets/{folder_name}/{idx}/params.pkl', 'wb') as f:
+            pickle.dump(d_params, f) # save params that generated the wave series
+
+        with open(f'datasets/{folder_name}/{idx}/tensors.pkl', 'wb') as f:
+            pickle.dump(data, f)
+        save(wave_series=data, path=f'datasets/{folder_name}/{idx}', scale=scale, match_range=match_range)
 
 ctx = multiprocessing.get_context('fork')
 result_queue = ctx.Queue(maxsize=10_000)
 
 num_workers: int = os.cpu_count() # type: ignore
 seeds = np.random.SeedSequence(42).spawn(num_workers)
-num_samples = 100_000
+num_samples = 10_000
 base, extra = divmod(num_samples, num_workers)
 counts = [base + (i < extra) for i in range(num_workers)]
 

@@ -12,9 +12,10 @@ from typing import Literal, NotRequired, TypedDict, overload
 
 import torch
 from PIL import Image
-from src import image_size
 from torch import Tensor
 from tqdm import tqdm
+
+from src import image_size
 
 
 def _wavevector(angle_math: float, wavelength: float) -> tuple[float, float]:
@@ -198,6 +199,7 @@ class WaveCollection:
     def create_wave_collection(self, use_tqdm: bool = False) -> list[tuple[WaveParams, Tensor]]:
         """
         Create a collection of tuples each containing a WaveParams object and a wave Tensor.
+        Default use for overlapping the created waves in the collection to a single wave Tensor.
 
         Args:
             use_tqdm (bool): Whether to show a progress bar during generation. Defaults to False.
@@ -205,7 +207,7 @@ class WaveCollection:
             list[tuple[WaveParams, Tensor]]: A list of tuples, each containing a WaveParams object and a wave frames Tensor containing `time_steps` many frames (wave images).
         """
         show = lambda x: tqdm(x) if use_tqdm else x
-        return [self.wave_generator.generate_wave() for _ in show(range(self.num_waves() if callable(self.num_waves) else self.num_waves))]
+        return [self.wave_generator.generate_wave() for _ in show(range(self.num_waves() if callable(self.num_waves) else self.num_waves))] # type: ignore
 
     def create(self, use_tqdm: bool = False) -> tuple[tuple[WaveParams, ...], Tensor]:
         """
@@ -272,8 +274,8 @@ def wave_series_to_imgs(
             raise ValueError("match_range must be provided for scale 'cut'.")
         img_wave = (img_wave - match_range[0]) / (match_range[1] - match_range[0]) * 255
     int8_wave_series = img_wave.to(torch.uint8)
-    split_waves = [i.numpy() for i in torch.unbind(int8_wave_series, dim=0)] # type: ignore
-    return [Image.fromarray(wave) for wave in split_waves] # type: ignore
+    split_waves = [i.numpy() for i in torch.unbind(int8_wave_series, dim=0)]
+    return [Image.fromarray(wave) for wave in split_waves]
 
 
 @overload
