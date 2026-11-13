@@ -44,7 +44,7 @@ class WavePredictor:
         if initial_phases is not None and len(initial_phases) != len(self.wave.params):
             raise ValueError(f"Length of initial_phases ({len(initial_phases)}) must match the number of waves ({len(self.wave.params)}).")
 
-        initial_phases = initial_phases if initial_phases is not None else torch.zeros(self.timesteps, dtype=torch.float32)
+        initial_phases = initial_phases if initial_phases is not None else torch.zeros(len(self.wave.params), dtype=torch.float32)
         self.phases = Parameter(initial_phases)
         self.optimizer = torch.optim.Adam([self.phases], lr=learning_rate)
 
