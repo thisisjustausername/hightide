@@ -100,19 +100,19 @@ class WaveParams(TypedDict):
     """
     resolution_px_per_km: int
     resolution_seconds_per_time_step: int
-    timestep: int
     angle: float
     wavelength: float
     amplitude: float
     phase: float
     period: float
-    img_shape: tuple[int, int]
+    img_shape: NotRequired[tuple[int, int]]
+    timestep: NotRequired[int]
     alpha: NotRequired[float]
 
 
 class WaveGenerator:
     """
-    Class for parameter generator functions to create Wave object
+    Class for parameter generator functions to create single Wave object with timesteps.
 
     Attributes:
         resolution_px_per_km (Callable[[], int]): Number of pixels per kilometer
@@ -174,7 +174,7 @@ class WaveGenerator:
             [
                 generate_wave(
                     # timestep overrides timestep from params
-                    **(params | {'timestep': timestep}) # type: ignore
+                    **(params | {'timestep': timestep})
                 ) for timestep in range(self.time_steps)
             ]
         )
@@ -182,7 +182,7 @@ class WaveGenerator:
 
 class WaveCollection:
     """
-    A Generator for either a Collection of single wave Tensors or a single Tensor consisting of overlapping wave Tensors.
+    A Generator for (either a Collection of single wave Tensors or) a single Tensor consisting of overlapping wave Tensors.
 
     Attributes:
         wave_generator (WaveGenerator): The WaveGenerator instance to use for generating wave parameters.
@@ -226,6 +226,25 @@ class WaveCollection:
         # assert torch.max(wave) <= 1
         # assert torch.min(wave) >= 0
         return params, wave_series
+
+
+class SuperWave:
+    """
+    A SuperWave class for wave tensors, that are a timeseries and are made up of overlapping waves.
+    """
+    def __init__(self, wave_params: tuple[WaveParams, ...], time_steps: int = 7, image_shape: tuple[int, int] = (256, 256)):
+        self.params = tuple(i | {'timestep': 0, 'img_shape': image_shape} for i in wave_params) # set timestep to 0, image_shape to image_shape
+        self.wave_img: Tensor = torch.stack(
+            [
+                torch.stack(
+                    [
+                        generate_wave(**(params | {'timestep': ts})) for params in wave_params # single wave at single point in time
+                    ]
+                    ).sum(dim=0) # wave_stack at single point in time
+            for ts in range(time_steps)
+            ] # list of wave_stacks each at a single point in time
+        ) # stacked waves over time
+
 
 
 @overload
