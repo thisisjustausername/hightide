@@ -182,7 +182,7 @@ def prediction_pipeline(
         early_stopping=early_stopping
     )
 
-    wave_predictor.fit(steps=steps)
+    wave_predictor.fit(steps=steps, verbose=verbose)
 
     if verbose:
         print(f'Difference in wave phases: {wave_predictor.phases.detach().numpy() - wave_predictor.original_phases.numpy()}')
@@ -193,12 +193,13 @@ def prediction_pipeline(
     # save the results
     with open(os.path.join(base_path, 'predicted_params.pkl'), 'wb') as f:
         pickle.dump(tuple(wave_predictor.generate_super_wave(wave_predictor.phases).params), f)
+    # TODO: add amount of actually done steps (e.g. less with early stopping raised)
     with open(os.path.join(base_path, 'results.json'), 'w') as f:
         json.dump(
             {
                 'phases': wave_predictor.phases.detach().numpy().tolist(),
                 'original_phases': wave_predictor.original_phases.numpy().tolist(),
-                'loss': wave_predictor.loss(wave_predictor.phases).item(),
+                'loss': wave_predictor.loss(wave_predictor.phases).item(), # recompute, since not done after last step of optimizer
                 'loss_func_name': wave_predictor.loss_func.__name__ if hasattr(wave_predictor.loss_func, '__name__') else str(wave_predictor.loss_func),
                 'loss_func_doc': wd.strip() if hasattr(wave_predictor.loss_func, '__doc__') and (wd := wave_predictor.loss_func.__doc__) is not None else None,
                 'initial_phases': initial_phases.detach().numpy().tolist(),
@@ -240,6 +241,8 @@ if __name__ == '__main__':
     # geodesic_angular_loss = lambda x_pred, x_true : (torch.atan2(torch.sin(x_pred - x_true), torch.cos(x_pred - x_true))**2).mean()
     # mse = lambda pred, true: ((pred - true) ** 2).mean()
 
+    from tqdm import tqdm
+
     # NOTE: give function a name, so that it can be saved in the results.json file.
     # NOTE: add code into docstring, so that it can be saved in the results.json file.
     def mse(pred, true):
@@ -249,13 +252,14 @@ if __name__ == '__main__':
         return ((pred - true) ** 2).mean()
 
 
-    prediction_pipeline(
-        item=878,
-        time_steps=7,
-        image_shape=(256, 256),
-        loss_func=mse,
-        learning_rate=10e-3,
-        early_stopping=30,
-        steps=2000,
-        verbose=True
-    )
+    for i in tqdm(range(8984)):
+        prediction_pipeline(
+            item=878,
+            time_steps=7,
+            image_shape=(256, 256),
+            loss_func=mse,
+            learning_rate=10e-3,
+            early_stopping=30,
+            steps=2000,
+            verbose=False
+        )
