@@ -9,6 +9,7 @@ import os
 import pickle
 from collections.abc import Callable
 
+import matplotlib.pyplot as plt
 import torch
 from torch import Tensor
 from torch.nn import Parameter
@@ -228,13 +229,13 @@ def prediction_pipeline(
         i.save(os.path.join(base_path, 'predicted', f'{index}.png'))
 
     # Plot the loss over iterations
-    import matplotlib.pyplot as plt
 
     plt.plot(wave_predictor.losses)
     plt.title('Loss over iterations')
     plt.xlabel('Iteration')
     plt.ylabel('Loss')
     plt.savefig(os.path.join(base_path, 'loss.png'), dpi=200, bbox_inches='tight')
+    plt.close()
 
 if __name__ == '__main__':
     # euclidean_chord_distance = lambda x_pred, x_true : ((torch.cos(x_pred) - torch.cos(x_true))**2 + (torch.sin(x_pred) - torch.sin(x_true))**2).mean()
