@@ -10,6 +10,7 @@ import pickle
 from collections.abc import Callable
 
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from torch import Tensor
 from torch.nn import Parameter
@@ -26,9 +27,21 @@ class WavePredictor:
         initial_phases: Tensor | None = None,
         learning_rate: float = 10e-5,
         early_stopping: int | None = None,
-        # device: torch.device | None = None
+        device: torch.device | None = None
     ):
-        # self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        """
+        Initialize the WavePredictor with the original wave, loss function, and optimization parameters.
+
+        Args:
+            original_wave (SuperWave): The original wave to predict phases for.
+            loss_func (Callable[[Tensor, Tensor], Tensor]): The loss function to use for optimization.
+            initial_phases (Tensor | None): Initial phases for optimization. If None, initialized to zeros.
+            learning_rate (float): Learning rate for the optimizer.
+            early_stopping (int | None): Number of steps to wait for improvement before stopping early. If None, early stopping is disabled.
+            device (torch.device | None): The device to use for computation. If None, the default device is used.
+        """
+
+        self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.wave = original_wave
 
@@ -45,7 +58,7 @@ class WavePredictor:
             raise ValueError(f"Length of initial_phases ({len(initial_phases)}) must match the number of waves ({len(self.wave.params)}).")
 
         initial_phases = initial_phases if initial_phases is not None else torch.zeros(len(self.wave.params), dtype=torch.float32)
-        self.phases = Parameter(initial_phases)
+        self.phases = Parameter(initial_phases.to(device=self.device, dtype=torch.float32))
         self.optimizer = torch.optim.Adam([self.phases], lr=learning_rate)
 
 
@@ -61,7 +74,8 @@ class WavePredictor:
         return SuperWave(
             wave_params=tuple(WaveParams(wp | {'phase': p}) for wp, p in zip(self.wave_without_phase, phases)), # type: ignore
             time_steps=self.timesteps,
-            image_shape=self.img_shape
+            image_shape=self.img_shape,
+            device=self.device
         )
 
     def difference(self) -> Tensor:
@@ -99,7 +113,7 @@ class WavePredictor:
         self.optimizer.step()
         return loss
 
-    def fit(self, steps: int = 200, verbose: bool = True) -> float:
+    def fit(self, steps: int = 200, verbose: bool = True) -> np.ndarray:
         """
         Fit the model to the target wave by optimizing the phase parameter.
 
@@ -118,8 +132,8 @@ class WavePredictor:
                     if verbose: print(f'Early stopping at step {i} with loss {loss.item():.6e}')
                     break
             if i % 10 == 0 and verbose:
-                print(f'Step {i:<5} | Loss = {loss.item():<10.6e} | Phases = {self.phases.detach().numpy().tolist()}')
-        return self.phases.detach().numpy()
+                print(f'Step {i:<5} | Loss = {loss.item():<10.6e} | Phases = {self.phases.detach().cpu().numpy().tolist()}')
+        return self.phases.detach().cpu().numpy()
 
     def predict(self) -> SuperWave:
         """
@@ -139,6 +153,7 @@ def prediction_pipeline(
     learning_rate: float = 10e-3,
     early_stopping: int = 30,
     steps: int = 1500,
+    device: torch.device | None = None,
     verbose: bool = True
 ) -> None:
     """
@@ -152,9 +167,12 @@ def prediction_pipeline(
         learning_rate (float): The learning rate for the optimizer.
         early_stopping (int): The number of steps to wait for improvement before stopping early.
         steps (int): The maximum number of optimization steps to perform.
+        device (torch.device | None): The device to use for computation. If None, the default device is used.
         verbose (bool): Whether to print information during the prediction process.
 
     """
+
+    device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if loss_func is None:
         def mse(pred, true):
@@ -170,7 +188,8 @@ def prediction_pipeline(
     super_wave = SuperWave(
         wave_params=tuple(WaveParams(**p) for p in parameters),
         time_steps=time_steps,
-        image_shape=image_shape
+        image_shape=image_shape,
+        device=device
     )
 
     initial_phases = torch.full((len(super_wave.params),), 0.0, dtype=torch.float64)
@@ -180,27 +199,38 @@ def prediction_pipeline(
         loss_func=loss_func,
         initial_phases=initial_phases,
         learning_rate=learning_rate,
-        early_stopping=early_stopping
+        early_stopping=early_stopping,
+        device=device
     )
 
     wave_predictor.fit(steps=steps, verbose=verbose)
 
     if verbose:
-        print(f'Difference in wave phases: {wave_predictor.phases.detach().numpy() - wave_predictor.original_phases.numpy()}')
+        print(f'Difference in wave phases: {wave_predictor.phases.detach().cpu().numpy() - wave_predictor.original_phases.detach().cpu().numpy()}')
 
     base_path = os.path.join(params.dataset_base_path, 'wave_dataset', str(item), 'phase_pred')
     os.makedirs(base_path, exist_ok=True)
 
     # save the results
     with open(os.path.join(base_path, 'predicted_params.pkl'), 'wb') as f:
-        pickle.dump(tuple(wave_predictor.generate_super_wave(wave_predictor.phases).params), f)
+        pickle.dump(
+            tuple(
+                WaveParams(**(wp | {'phase': float(p)})) for wp, p in zip(wave_predictor.wave_without_phase, wave_predictor.phases.detach().cpu().numpy()) # type: ignore
+            ), f
+        )
+
+    with torch.no_grad():
+        final_loss = wave_predictor.loss(wave_predictor.phases).item() # recompute, since not done after last step of optimizer
+        diff = wave_predictor.difference().cpu()
+        pred_wave = wave_predictor.generate_super_wave(wave_predictor.phases).wave_img.cpu()
+
     # TODO: add amount of actually done steps (e.g. less with early stopping raised)
     with open(os.path.join(base_path, 'results.json'), 'w') as f:
         json.dump(
             {
-                'phases': wave_predictor.phases.detach().numpy().tolist(),
+                'phases': wave_predictor.phases.detach().cpu().numpy().tolist(),
                 'original_phases': wave_predictor.original_phases.numpy().tolist(),
-                'loss': wave_predictor.loss(wave_predictor.phases).item(), # recompute, since not done after last step of optimizer
+                'loss': final_loss,
                 'loss_func_name': wave_predictor.loss_func.__name__ if hasattr(wave_predictor.loss_func, '__name__') else str(wave_predictor.loss_func),
                 'loss_func_doc': wd.strip() if hasattr(wave_predictor.loss_func, '__doc__') and (wd := wave_predictor.loss_func.__doc__) is not None else None,
                 'initial_phases': initial_phases.detach().numpy().tolist(),
@@ -215,15 +245,13 @@ def prediction_pipeline(
         )
 
     # Save the difference between waves and predicted waves
-    diff = wave_predictor.difference()
-
     imgs = wave_series_to_imgs(diff, scale='normalize', match_range=None)
     os.makedirs(os.path.join(base_path, 'diffs'), exist_ok=True)
     for index, i in enumerate(imgs):
         i.save(os.path.join(base_path, 'diffs', f'{index}.png'))
 
     # Save the predicted waves
-    imgs = wave_series_to_imgs(wave_predictor.generate_super_wave(wave_predictor.phases).wave_img, scale='normalize', match_range=None)
+    imgs = wave_series_to_imgs(pred_wave, scale='normalize', match_range=None)
     os.makedirs(os.path.join(base_path, 'predicted'), exist_ok=True)
     for index, i in enumerate(imgs):
         i.save(os.path.join(base_path, 'predicted', f'{index}.png'))
@@ -262,5 +290,6 @@ if __name__ == '__main__':
             learning_rate=10e-3,
             early_stopping=30,
             steps=2000,
+            device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
             verbose=False
         )

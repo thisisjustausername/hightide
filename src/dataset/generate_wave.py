@@ -57,7 +57,8 @@ def generate_wave(
     phase,
     period,
     alpha: float | None = None,
-    img_shape: tuple[int, int] = image_size) -> Tensor:
+    img_shape: tuple[int, int] = image_size,
+    device: torch.device | None = None) -> Tensor:
     """
     Generate a wave pattern(s) based on the given parameters.
 
@@ -72,13 +73,14 @@ def generate_wave(
         period (int): Period of the wave
         alpha (float): Alpha value for the wave, it sets the opacity (used when overlapping waves)
         img_shape (tuple[int, int]): Size of the tensor (later image, too)
+        device (torch.device | None): The device to create the tensor on. If None, the default device is used.
     Returns:
         Tensor: Tensor containing the generated wave pattern(s)
     """
 
     # Add device=device to the linspace creations
-    y = torch.linspace(0, img_shape[0] - 1, img_shape[0], dtype=torch.float32) # , device=device)
-    x = torch.linspace(0, img_shape[1] - 1, img_shape[1], dtype=torch.float32) # , device=device)
+    y = torch.linspace(0, img_shape[0] - 1, img_shape[0], dtype=torch.float32, device=device)
+    x = torch.linspace(0, img_shape[1] - 1, img_shape[1], dtype=torch.float32, device=device)
     x_grid, y_grid = torch.meshgrid(x, y, indexing='xy')
 
     # Get wave vector
@@ -221,7 +223,7 @@ class WaveCollection:
         params, waves = zip(*self.create_wave_collection(use_tqdm=use_tqdm))
         wave_series: Tensor = torch.stack(waves).sum(dim=0)
         # TODO: maybe remove normalization
-        # wave = (wave - (mx := torch.max(wave))) / (mx - torch.min(wave)) # type: ignore
+        # wave = (wave - (mx := torch.max(wave))) / (mx - torch.min(wave))
         # TODO: backpropagate the wave normalization onto the parameters
         # assert torch.max(wave) <= 1
         # assert torch.min(wave) >= 0
@@ -232,13 +234,29 @@ class SuperWave:
     """
     A SuperWave class for wave tensors, that are a timeseries and are made up of overlapping waves.
     """
-    def __init__(self, wave_params: tuple[WaveParams, ...], time_steps: int = 7, image_shape: tuple[int, int] = (256, 256)):
+    def __init__(
+        self,
+        wave_params: tuple[WaveParams, ...],
+        time_steps: int = 7,
+        image_shape: tuple[int, int] = (256, 256),
+        device: torch.device | None = None
+    ):
+        """
+        Initialize a SuperWave instance.
+
+        Args:
+            wave_params (tuple[WaveParams, ...]): A tuple of WaveParams objects to generate the overlapping waves.
+            time_steps (int): The number of time steps for the wave series.
+            image_shape (tuple[int, int]): The shape of the generated wave images.
+            device (torch.device | None): The device to create the tensor on. If None, the default device is used.
+        """
+        device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.params = tuple(i | {'timestep': 0, 'img_shape': image_shape} for i in wave_params) # set timestep to 0, image_shape to image_shape
         self.wave_img: Tensor = torch.stack(
             [
                 torch.stack(
                     [
-                        generate_wave(**(params | {'timestep': ts})) for params in wave_params # single wave at single point in time
+                        generate_wave(**(params | {'timestep': ts}), device=device) for params in wave_params # single wave at single point in time
                     ]
                     ).sum(dim=0) # wave_stack at single point in time
             for ts in range(time_steps)
