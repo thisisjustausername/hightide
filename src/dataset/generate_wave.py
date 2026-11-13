@@ -245,6 +245,16 @@ class SuperWave:
             ] # list of wave_stacks each at a single point in time
         ) # stacked waves over time
 
+    def save_to_images(self, folder_path: str):
+        """
+        Save the wave tensor as a series of images.
+
+        Args:
+            folder_path (str): The folder path to save the image series to.
+        """
+        os.makedirs(folder_path, exist_ok=True)
+        for index, image in enumerate(wave_series_to_imgs(self.wave_img, scale='normalize', match_range=None)):
+            image.save(os.path.join(folder_path, str(index) + '.png'))
 
 
 @overload
