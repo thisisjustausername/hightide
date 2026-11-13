@@ -281,7 +281,7 @@ if __name__ == '__main__':
         return ((pred - true) ** 2).mean()
 
 
-    for i in tqdm(range(8984)):
+    for i in tqdm(range(8984), desc='Predicting wave phases'):
         prediction_pipeline(
             item=i,
             time_steps=7,
