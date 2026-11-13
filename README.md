@@ -14,3 +14,13 @@ To generate the dataset containing timeseries of overlapping waves, run followin
 ```bash
 python3 -m src.dataset.generate_dataset
 ```
+
+# Predict Phases
+To predict the phases of the waves in the dataset, run following command.\
+For each wave timeseries, made up of timesteps each containing an image of overlapping waves, it predicts the phases of all waves.
+```bash
+python3 -m src.predict_phases.phase_predictor
+```
+
+# TODOs
+* Add GPU-Support to `src.predict_phases.phase_predictor` pipeline and specific classes.
