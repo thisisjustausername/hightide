@@ -254,7 +254,7 @@ if __name__ == '__main__':
 
     for i in tqdm(range(8984)):
         prediction_pipeline(
-            item=878,
+            item=i,
             time_steps=7,
             image_shape=(256, 256),
             loss_func=mse,
