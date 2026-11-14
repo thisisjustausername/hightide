@@ -5,6 +5,8 @@ Multiprocessing Phase Predictor
 This script runs the phase predictor in parallel across multiple GPUs and processes.
 It uses a queue to distribute work items (from START to END) to worker processes, each of which runs a prediction pipeline on a specified GPU.
 """
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import torch
 import torch.multiprocessing as mp
@@ -15,6 +17,15 @@ START, END = 0, 8984
 NUM_GPUS = 2
 PROCS_PER_GPU = 8
 
+@dataclass
+class PredictionPipelineParameters:
+    time_steps: int = 7
+    image_shape: tuple = (256, 256)
+    loss_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None
+    learning_rate: float = 10e-3
+    early_stopping: int = 30
+    steps: int = 2000
+    verbose: bool = False
 
 def worker(gpu_id, queue):
     torch.cuda.set_device(gpu_id)
@@ -26,15 +37,9 @@ def worker(gpu_id, queue):
             break
         try:
             prediction_pipeline(
+                **PredictionPipelineParameters().__dict__,
                 item=i,
-                time_steps=7,
-                image_shape=(256, 256),
-                loss_func=None,
-                learning_rate=10e-3,
-                early_stopping=30,
-                steps=2000,
                 device=device,
-                verbose=False,
             )
         except Exception:
             print(f"[gpu {gpu_id}] item {i} failed:\n", flush=True)
