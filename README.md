@@ -23,4 +23,3 @@ python3 -m src.predict_phases.phase_predictor
 ```
 
 # TODOs
-* Add GPU-Support to `src.predict_phases.phase_predictor` pipeline and specific classes.
