@@ -16,6 +16,7 @@ from torch import Tensor
 from tqdm import tqdm
 
 from src import image_size
+# from src.dataset.masks import PerlinNoise
 
 
 def _wavevector(angle_math: float, wavelength: float) -> tuple[float, float]:
@@ -93,7 +94,7 @@ def generate_wave(
     wave = amplitude * (torch.cos(k[0] * x_grid / resolution_px_per_km + k[1] * y_grid / resolution_px_per_km - current_phase) -
                         torch.sin(k[0] * x_grid / resolution_px_per_km + k[1] * y_grid / resolution_px_per_km - current_phase))
 
-    return wave * (alpha if alpha else 1)
+    return wave * (alpha if alpha is not None else 1)
 
 
 class WaveParams(TypedDict):
@@ -112,9 +113,91 @@ class WaveParams(TypedDict):
     alpha: NotRequired[float]
 
 
+class SuperWave:
+    """
+    A SuperWave class for wave tensors, that are a timeseries and are made up of overlapping waves.
+    """
+    def __init__(
+        self,
+        wave_params: tuple[WaveParams, ...],
+        time_steps: int = 7,
+        image_shape: tuple[int, int] = (256, 256),
+        device: torch.device | None = None,
+        to_cpu: bool = False
+    ):
+        """
+        Initialize a SuperWave instance.
+
+        Args:
+            wave_params (tuple[WaveParams, ...]): A tuple of WaveParams objects to generate the overlapping waves.
+            time_steps (int): The number of time steps for the wave series.
+            image_shape (tuple[int, int]): The shape of the generated wave images.
+            device (torch.device | None): The device to create the tensor on. If None, the default device is used.
+            to_cpu (bool): If True, the generated wave tensor will be moved to CPU after creation. Defaults to False.
+        """
+        self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.params = tuple(i | {'timestep': 0, 'img_shape': image_shape} for i in wave_params) # set timestep to 0, image_shape to image_shape
+        self.time_steps = time_steps
+        self.image_shape = image_shape
+        self.wave_img: Tensor = torch.stack(
+            [
+                torch.stack(
+                    [
+                        generate_wave(**(params | {'timestep': ts}), device=self.device) for params in wave_params # single wave at single point in time
+                    ]
+                    ).sum(dim=0) # wave_stack at single point in time
+            for ts in range(time_steps)
+            ] # list of wave_stacks each at a single point in time
+        ) # stacked waves over time
+        if to_cpu:
+            self.wave_img = self.wave_img.cpu()
+
+    def save_to_images(self, folder_path: str):
+        """
+        Save the wave tensor as a series of images.
+
+        Args:
+            folder_path (str): The folder path to save the image series to.
+        """
+        os.makedirs(folder_path, exist_ok=True)
+        for index, image in enumerate(wave_series_to_imgs(self.wave_img, scale='normalize', match_range=None)):
+            image.save(os.path.join(folder_path, str(index) + '.png'))
+
+    @property
+    def metadata(self) -> dict[str, int | tuple[WaveParams] | tuple[int, int] | Tensor]:
+        """
+        Get the metadata of the SuperWave instance.
+
+        Returns:
+            dict[str, list[WaveParams]]: A dictionary containing the metadata of the SuperWave instance.
+        """
+        exclude = {'device', 'wave_img'}
+        return {k: v for k, v in self.__dict__.items() if k not in exclude}
+
+    @property
+    def general_metadata(self) -> dict[str, int | tuple[int, int]]:
+        """
+        Get the general metadata of the SuperWave instance that is not specific to each subwave.
+
+        Returns:
+            dict[str, int | tuple[int, int]]: A dictionary containing the general metadata of the SuperWave instance.
+        """
+        allowed = {'time_steps', 'image_shape'}
+        return {k: v for k, v in self.__dict__.items() if k in allowed}
+
+    @property
+    def clean_params(self) -> tuple[WaveParams, ...]:
+        """
+        Get the cleaned parameters of the SuperWave instance that are not specific to each subwave.
+
+        Returns:
+            tuple[WaveParams, ...]: A tuple containing the cleaned WaveParams objects of the SuperWave instance.
+        """
+        return tuple(WaveParams(**{k: v for k, v in params.items() if k not in {'timestep', 'img_shape'}}) for params in self.params) # type: ignore
+
 class WaveGenerator:
     """
-    Class for parameter generator functions to create single Wave object with timesteps.
+    Class for parameter generator functions to create single Wave object as well as SuperWave object with timesteps.
 
     Attributes:
         resolution_px_per_km (Callable[[], int]): Number of pixels per kilometer
@@ -127,23 +210,31 @@ class WaveGenerator:
         period (Callable[[], float]): Period of the wave
         alpha (Callable[[], float] | None = None): Alpha value for the wave, it sets the opacity (used when overlapping waves)
         img_shape (Callable[[], tuple[int, int]]): Size of the tensor (later image, too)
+        device (torch.device | None): The device to create the tensor on. If None, the default device is used.
 
     Methods:
         create(): Create a WaveParams object
         generate_wave(): Generate a Wave object with WaveParams and simulation Tensor
     """
 
-    def __init__(self, resolution_px_per_km: Callable[[], int],
-                 resolution_seconds_per_time_step: Callable[[], int],
-                 angle: Callable[[], float],
-                 wavelength: Callable[[], float],
-                 amplitude: Callable[[], float],
-                 phase: Callable[[], float],
-                 period: Callable[[], float],
-                 time_steps: int,
-                 img_shape: tuple[int, int],
-                 alpha: Callable[[], float] | None = None):
+    def __init__(
+        self,
+        resolution_px_per_km: Callable[[], int],
+        resolution_seconds_per_time_step: Callable[[], int],
+        angle: Callable[[], float],
+        wavelength: Callable[[], float],
+        amplitude: Callable[[], float],
+        phase: Callable[[], float],
+        period: Callable[[], float],
+        num_waves: Callable[[], int] | int,
+        time_steps: int,
+        img_shape: tuple[int, int],
+        alpha: Callable[[], float] | None = None,
+        device: torch.device | None = None,
+        to_cpu: bool = False
+    ):
 
+        self.device: torch.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.resolution_px_per_km: Callable[[], int] = resolution_px_per_km
         self.resolution_seconds_per_time_step: Callable[[], int] = resolution_seconds_per_time_step
         self.angle: Callable[[], float] = angle
@@ -152,8 +243,10 @@ class WaveGenerator:
         self.phase: Callable[[], float] = phase
         self.period: Callable[[], float] = period
         self.alpha: Callable[[], float] | None = alpha
+        self.num_waves: Callable[[], int] = num_waves if callable(num_waves) else lambda: num_waves # type: ignore
         self.time_steps: int = time_steps
         self.img_shape:tuple[int, int] = img_shape
+        self.to_cpu: bool = to_cpu
 
     def create(self) -> WaveParams:
         """
@@ -163,7 +256,7 @@ class WaveGenerator:
             WaveParams: A WaveParams instance for the first wave of the time series.
         """
         # starting timestep is always 0
-        return WaveParams(**({k: v() if callable(v) else v for k, v in self.__dict__.items() if v is not None and k != 'time_steps'} | {'timestep': 0})) # type: ignore
+        return WaveParams(**({k: v() if callable(v) else v for k, v in self.__dict__.items() if v is not None and k not in ['time_steps', 'num_waves', 'device', 'to_cpu']} | {'timestep': 0})) # type: ignore
 
     def generate_wave(self) -> tuple[WaveParams, Tensor]:
         """
@@ -176,9 +269,25 @@ class WaveGenerator:
             [
                 generate_wave(
                     # timestep overrides timestep from params
-                    **(params | {'timestep': timestep})
+                    **(params | {'timestep': timestep}), device=self.device
                 ) for timestep in range(self.time_steps)
             ]
+        )
+
+    def generate_super_wave(self) -> SuperWave:
+        """
+        Generate a SuperWave instance from the WaveParams and the matching Tensor from the wave simulation for those parameters.
+
+        Returns:
+            SuperWave: A SuperWave instance containing the WaveParams instance and the corresponding Tensor with `time_steps` many frames (wave images).
+        """
+        params: tuple[WaveParams, ...] = tuple(self.create() for _ in range(self.num_waves()))
+        return SuperWave(
+            wave_params=params,
+            time_steps=self.time_steps,
+            image_shape=self.img_shape,
+            device=self.device,
+            to_cpu=self.to_cpu
         )
 
 
@@ -228,51 +337,6 @@ class WaveCollection:
         # assert torch.max(wave) <= 1
         # assert torch.min(wave) >= 0
         return params, wave_series
-
-
-class SuperWave:
-    """
-    A SuperWave class for wave tensors, that are a timeseries and are made up of overlapping waves.
-    """
-    def __init__(
-        self,
-        wave_params: tuple[WaveParams, ...],
-        time_steps: int = 7,
-        image_shape: tuple[int, int] = (256, 256),
-        device: torch.device | None = None
-    ):
-        """
-        Initialize a SuperWave instance.
-
-        Args:
-            wave_params (tuple[WaveParams, ...]): A tuple of WaveParams objects to generate the overlapping waves.
-            time_steps (int): The number of time steps for the wave series.
-            image_shape (tuple[int, int]): The shape of the generated wave images.
-            device (torch.device | None): The device to create the tensor on. If None, the default device is used.
-        """
-        device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.params = tuple(i | {'timestep': 0, 'img_shape': image_shape} for i in wave_params) # set timestep to 0, image_shape to image_shape
-        self.wave_img: Tensor = torch.stack(
-            [
-                torch.stack(
-                    [
-                        generate_wave(**(params | {'timestep': ts}), device=device) for params in wave_params # single wave at single point in time
-                    ]
-                    ).sum(dim=0) # wave_stack at single point in time
-            for ts in range(time_steps)
-            ] # list of wave_stacks each at a single point in time
-        ) # stacked waves over time
-
-    def save_to_images(self, folder_path: str):
-        """
-        Save the wave tensor as a series of images.
-
-        Args:
-            folder_path (str): The folder path to save the image series to.
-        """
-        os.makedirs(folder_path, exist_ok=True)
-        for index, image in enumerate(wave_series_to_imgs(self.wave_img, scale='normalize', match_range=None)):
-            image.save(os.path.join(folder_path, str(index) + '.png'))
 
 
 @overload

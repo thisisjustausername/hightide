@@ -8,3 +8,4 @@ matplotlib
 scipy
 pillow
 tqdm
+datasets
