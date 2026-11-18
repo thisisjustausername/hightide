@@ -123,7 +123,8 @@ class SuperWave:
         time_steps: int = 7,
         image_shape: tuple[int, int] = (256, 256),
         device: torch.device | None = None,
-        to_cpu: bool = False
+        to_cpu: bool = False,
+        to_numpy: bool = False
     ):
         """
         Initialize a SuperWave instance.
@@ -151,6 +152,8 @@ class SuperWave:
         ) # stacked waves over time
         if to_cpu:
             self.wave_img = self.wave_img.cpu()
+        if to_numpy:
+            self.wave_img = self.wave_img.numpy()
 
     def save_to_images(self, folder_path: str):
         """
@@ -231,7 +234,8 @@ class WaveGenerator:
         img_shape: tuple[int, int],
         alpha: Callable[[], float] | None = None,
         device: torch.device | None = None,
-        to_cpu: bool = False
+        to_cpu: bool = False,
+        to_numpy: bool = False
     ):
 
         self.device: torch.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -247,6 +251,7 @@ class WaveGenerator:
         self.time_steps: int = time_steps
         self.img_shape:tuple[int, int] = img_shape
         self.to_cpu: bool = to_cpu
+        self.to_numpy: bool = to_numpy
 
     def create(self) -> WaveParams:
         """
@@ -256,7 +261,7 @@ class WaveGenerator:
             WaveParams: A WaveParams instance for the first wave of the time series.
         """
         # starting timestep is always 0
-        return WaveParams(**({k: v() if callable(v) else v for k, v in self.__dict__.items() if v is not None and k not in ['time_steps', 'num_waves', 'device', 'to_cpu']} | {'timestep': 0})) # type: ignore
+        return WaveParams(**({k: v() if callable(v) else v for k, v in self.__dict__.items() if v is not None and k not in ['time_steps', 'num_waves', 'device', 'to_cpu', 'to_numpy']} | {'timestep': 0})) # type: ignore
 
     def generate_wave(self) -> tuple[WaveParams, Tensor]:
         """
@@ -287,7 +292,8 @@ class WaveGenerator:
             time_steps=self.time_steps,
             image_shape=self.img_shape,
             device=self.device,
-            to_cpu=self.to_cpu
+            to_cpu=self.to_cpu,
+            to_numpy=self.to_numpy
         )
 
 
