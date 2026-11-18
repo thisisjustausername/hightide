@@ -5,6 +5,7 @@ Wave Dataset Generation
 This module generates a wave image dataset
 """
 import os
+import shutil
 import threading
 from contextlib import contextmanager
 from multiprocessing import Queue
@@ -72,8 +73,6 @@ def create_dataset(batch: list[SuperWave]) -> Dataset:
 
     ds = Dataset.from_generator(gen, features=features, cache_dir=os.path.join(params.dataset_base_path, '_temp/cache/huggingface'))
     return ds
-    # ds.save_to_disk(path)
-    # ds.to_parquet(path, compression = None)
 
 
 def save_batch_parquet(batch: list[SuperWave], path: str) -> None:
@@ -163,7 +162,6 @@ def generate_wave_dataset(
     for _ in range(num_samples // batch_size):
         batch = [wave_generator.generate_super_wave() for _ in range(batch_size)]
         if folder_name is not None:
-            print('SAVING TO DISK...')
             save_batch_parquet(batch, os.path.join(params.dataset_base_path, f'{folder_name}/batch_{len(batches)}'))
         if return_dataset:
             batches.append(batch)
@@ -219,38 +217,9 @@ def working(counter):
         with counter.get_lock():
             counter.value -= 1
 
-
-def save_worker(save_queue, errors: list, busy, done) -> None:
-    while True:
-        item = save_queue.get()
-        if item is None:
-            return
-        with working(busy):
-            try:
-                item['dataset'].save_to_disk(item['path'])
-                with done.get_lock():
-                    done.value += 1
-            except Exception as e:
-                errors.append((item['path'], str(e)))
-
-
-def convert_worker(convert_queue, save_queue: Queue, busy) -> None:
-    while True:
-        item = convert_queue.get()
-        if item is None:
-            return
-        with working(busy):
-            try:
-                ds = create_dataset(item['batch'])
-                save_queue.put({'dataset': ds, 'path': item['path']})
-            except Exception as e:
-                print(f"Error in convert_worker (path {item['path']}): {e}")
-
-
 def worker(
     jobs,
     device: torch.device,
-    # convert_queue: Queue,
     wave_generator_config: dict[str, int | tuple[int, int] | tuple[float, float] | bool],
     num_samples: int,
     folder_name: str | None,
@@ -348,7 +317,7 @@ def run_pipeline(
     dataset_temp_path = os.path.join(params.dataset_base_path, '_temp')
     # keep separate to only check _temp for existence
     os.makedirs(dataset_temp_path, exist_ok=False)
-    os.makedirs(os.path.join(dataset_temp_path, '/cache/huggingface'))
+    os.makedirs(os.path.join(dataset_temp_path, 'cache/huggingface'))
 
     # default initialization
     gpu_processes = NUM_GPUS * 4
@@ -399,7 +368,7 @@ def run_pipeline(
     bad = [p.name for p in workers if p.exitcode != 0]
     succ_saved = len(os.listdir(output_path)) == (num_samples // batch_size)
 
-    os.rmdir(dataset_temp_path)
+    shutil.rmtree(dataset_temp_path)
 
     if bad or not succ_saved:
         raise Exception(f"Some processes exited with non-zero exit code: {bad}; expected {num_samples // batch_size} batches, but found {len(os.listdir(output_path))} in {output_path}")
