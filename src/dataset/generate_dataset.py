@@ -190,8 +190,8 @@ to_numpy: bool,
 device: torch.device | None = None
 ):
     return WaveGenerator(
-        resolution_px_per_km = lambda : resolution_px_per_km,
-        resolution_seconds_per_time_step = lambda : resolution_seconds_per_time_step,
+        resolution_px_per_km = resolution_px_per_km,
+        resolution_seconds_per_time_step = resolution_seconds_per_time_step,
         angle = lambda : np.random.uniform(*angle),
         wavelength = lambda : np.random.uniform(*wavelength),
         amplitude = lambda : np.random.uniform(*amplitude),

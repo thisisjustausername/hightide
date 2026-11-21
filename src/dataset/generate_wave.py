@@ -116,6 +116,13 @@ class WaveParams(TypedDict):
 class SuperWave:
     """
     A SuperWave class for wave tensors, that are a timeseries and are made up of overlapping waves.
+
+    Attributes:
+        device (torch.device): The device to create the tensor on.
+        params (tuple[WaveParams, ...]): A tuple of WaveParams objects to generate the overlapping waves.
+        time_steps (int): The number of time steps for the wave series.
+        image_shape (tuple[int, int]): The shape of the generated wave images.
+        wave_img (Tensor): The generated wave tensor.
     """
     def __init__(
         self,
@@ -222,8 +229,8 @@ class WaveGenerator:
 
     def __init__(
         self,
-        resolution_px_per_km: Callable[[], int],
-        resolution_seconds_per_time_step: Callable[[], int],
+        resolution_px_per_km: int,
+        resolution_seconds_per_time_step: int,
         angle: Callable[[], float],
         wavelength: Callable[[], float],
         amplitude: Callable[[], float],
@@ -239,8 +246,8 @@ class WaveGenerator:
     ):
 
         self.device: torch.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.resolution_px_per_km: Callable[[], int] = resolution_px_per_km
-        self.resolution_seconds_per_time_step: Callable[[], int] = resolution_seconds_per_time_step
+        self.resolution_px_per_km: int = resolution_px_per_km
+        self.resolution_seconds_per_time_step: int = resolution_seconds_per_time_step
         self.angle: Callable[[], float] = angle
         self.wavelength: Callable[[], float] = wavelength
         self.amplitude: Callable[[], float] = amplitude
