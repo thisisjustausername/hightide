@@ -334,13 +334,13 @@ def run_pipeline(
     jobs = ctx.Queue(maxsize=gpu_processes * 2)
 
     # status updates
-    busy = {n: ctx.Value('i', 0) for n in ('generate', 'convert', 'save')}
+    busy = ctx.Value('i', 0)
     done = ctx.Value('i', 0)
 
     workers = [
         ctx.Process(
             target=worker,
-            args=(jobs, torch.device(f'cuda:{i % NUM_GPUS}'), wave_generator_config, batch_size, folder_name, child_seeds[i], busy['generate'], done)
+            args=(jobs, torch.device(f'cuda:{i % NUM_GPUS}'), wave_generator_config, batch_size, folder_name, child_seeds[i], busy, done)
         ) for i in range(gpu_processes)
     ]
 
@@ -348,7 +348,7 @@ def run_pipeline(
     mon = threading.Thread(target=monitor, daemon=True, args=(
         stop,
         {'jobs': (jobs, gpu_processes * 2)},
-        {'generate': (busy['generate'], gpu_processes)},
+        {'generate': (busy, gpu_processes)},
         done, num_samples // batch_size))
 
     mon.start()

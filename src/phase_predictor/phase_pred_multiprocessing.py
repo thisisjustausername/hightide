@@ -43,8 +43,6 @@ def worker(gpu_id, queue):
             )
         except Exception:
             print(f"[gpu {gpu_id}] item {i} failed:\n", flush=True)
-            with open("failed_items.txt", "a") as f:
-                f.write(f"{i}\n")
 
 
 def main():
