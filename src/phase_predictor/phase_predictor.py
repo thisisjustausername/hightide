@@ -35,6 +35,7 @@ class WavePredictor:
         self,
         original_wave: SuperWave,
         loss_func: Callable[[Tensor, Tensor], Tensor],
+        approximated_wave: SuperWave | None = None,
         initial_phases: Tensor | None = None,
         learning_rate: float = 10e-5,
         early_stopping: int | None = None,
@@ -46,6 +47,7 @@ class WavePredictor:
         Args:
             original_wave (SuperWave): The original wave to predict phases for.
             loss_func (Callable[[Tensor, Tensor], Tensor]): The loss function to use for optimization.
+            approximated_wave (SuperWave | None): An approximated wave to use the parameters from for optimization. If None, the original wave is used.
             initial_phases (Tensor | None): Initial phases for optimization. If None, initialized to zeros.
             learning_rate (float): Learning rate for the optimizer.
             early_stopping (int | None): Number of steps to wait for improvement before stopping early. If None, early stopping is disabled.
@@ -55,10 +57,11 @@ class WavePredictor:
         self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.original_wave = original_wave
+        self.wave = approximated_wave if approximated_wave is not None else original_wave
 
         self.timesteps = self.original_wave.wave_img.shape[0]
         self.img_shape: tuple[int, int] = self.original_wave.wave_img.shape[1:] # type: ignore
-        self.wave_without_phase = tuple({k: v for k, v in wave.items() if k != 'phase'} for wave in self.original_wave.params)
+        self.wave_without_phase = tuple({k: v for k, v in wave.items() if k != 'phase'} for wave in self.wave.params) # use approx, and if that doesn't exist then use orig. wave
         self.early_stopping = early_stopping
         self.losses = []
         self.loss_func = loss_func
@@ -75,7 +78,7 @@ class WavePredictor:
 
     def generate_super_wave(self, phases: Tensor) -> SuperWave:
         """
-        Generate a wave for the specified phase and the other parameters from the original wave.
+        Generate a wave for the specified phase and the other parameters from the approximated wave in case it exist otherwise from the original wave.
 
         Args:
             phases (Tensor): The phases parameter to generate the wave.
@@ -148,7 +151,7 @@ class WavePredictor:
 
     def generate_predicted_wave(self) -> SuperWave:
         """
-        Generate a wave using the optimized phase parameter.
+        Generate a wave using the optimized phase parameters and the parameters of the approximated wave if it exists otherwise the parameters of the original wave.
 
         Returns:
             SuperWave: The predicted wave as a SuperWave object.
