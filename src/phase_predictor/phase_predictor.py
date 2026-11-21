@@ -19,7 +19,7 @@ import src.parameters as params
 from src.dataset.generate_wave import SuperWave, WaveParams, wave_series_to_imgs
 
 
-class WavePredictor:
+class PhasePredictor:
     """
     A class to predict the phase of a wave given its (approximate) parameters and a loss function.
 
@@ -42,7 +42,7 @@ class WavePredictor:
         device: torch.device | None = None
     ):
         """
-        Initialize the WavePredictor with the original wave, loss function, and optimization parameters.
+        Initialize the PhasePredictor with the original wave, loss function, and optimization parameters.
 
         Args:
             original_wave (SuperWave): The original wave to predict phases for.
@@ -208,7 +208,7 @@ def prediction_pipeline(
 
     initial_phases = torch.full((len(super_wave.params),), 0.0, dtype=torch.float64)
 
-    wave_predictor = WavePredictor(
+    wave_predictor = PhasePredictor(
         original_wave=super_wave,
         loss_func=loss_func,
         initial_phases=initial_phases,
