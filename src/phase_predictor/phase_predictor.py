@@ -20,6 +20,17 @@ from src.dataset.generate_wave import SuperWave, WaveParams, wave_series_to_imgs
 
 
 class WavePredictor:
+    """
+    A class to predict the phase of a wave given its (approximate) parameters and a loss function.
+
+    Attributes:
+        original_wave (SuperWave): The original wave to predict phases for.
+        loss_func (Callable[[Tensor, Tensor], Tensor]): The loss function to use for optimization.
+        initial_phases (Tensor | None): Initial phases for optimization. If None, initialized to zeros.
+        learning_rate (float): Learning rate for the optimizer.
+        early_stopping (int | None): Number of steps to wait for improvement before stopping early. If None, early stopping is disabled.
+        device (torch.device | None): The device to use for computation. If None, the default device is used.
+    """
     def __init__(
         self,
         original_wave: SuperWave,
@@ -43,21 +54,21 @@ class WavePredictor:
 
         self.device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        self.wave = original_wave
+        self.original_wave = original_wave
 
-        self.timesteps = self.wave.wave_img.shape[0]
-        self.img_shape: tuple[int, int] = self.wave.wave_img.shape[1:] # type: ignore
-        self.wave_without_phase = tuple({k: v for k, v in wave.items() if k != 'phase'} for wave in self.wave.params)
+        self.timesteps = self.original_wave.wave_img.shape[0]
+        self.img_shape: tuple[int, int] = self.original_wave.wave_img.shape[1:] # type: ignore
+        self.wave_without_phase = tuple({k: v for k, v in wave.items() if k != 'phase'} for wave in self.original_wave.params)
         self.early_stopping = early_stopping
         self.losses = []
         self.loss_func = loss_func
-        self.original_phases = torch.tensor([wave.get('phase', torch.nan) for wave in self.wave.params], dtype=torch.float32)
+        self.original_phases = torch.tensor([wave.get('phase', torch.nan) for wave in self.original_wave.params], dtype=torch.float32)
 
 
-        if initial_phases is not None and len(initial_phases) != len(self.wave.params):
-            raise ValueError(f"Length of initial_phases ({len(initial_phases)}) must match the number of waves ({len(self.wave.params)}).")
+        if initial_phases is not None and len(initial_phases) != len(self.original_wave.params):
+            raise ValueError(f"Length of initial_phases ({len(initial_phases)}) must match the number of waves ({len(self.original_wave.params)}).")
 
-        initial_phases = initial_phases if initial_phases is not None else torch.zeros(len(self.wave.params), dtype=torch.float32)
+        initial_phases = initial_phases if initial_phases is not None else torch.zeros(len(self.original_wave.params), dtype=torch.float32)
         self.phases = Parameter(initial_phases.to(device=self.device, dtype=torch.float32))
         self.optimizer = torch.optim.Adam([self.phases], lr=learning_rate)
 
@@ -87,7 +98,7 @@ class WavePredictor:
         Returns:
             Tensor: The computed difference as image.
         """
-        return self.wave.wave_img - self.generate_super_wave(self.phases).wave_img
+        return self.original_wave.wave_img - self.generate_super_wave(self.phases).wave_img
 
     def loss(self, phases: Tensor | Parameter) -> Tensor:
         """
@@ -98,7 +109,7 @@ class WavePredictor:
         Returns:
             Tensor: The computed loss value.
         """
-        return self.loss_func(self.generate_super_wave(phases).wave_img, self.wave.wave_img)
+        return self.loss_func(self.generate_super_wave(phases).wave_img, self.original_wave.wave_img)
 
     def backpropagate(self) -> Tensor:
         """
@@ -135,9 +146,9 @@ class WavePredictor:
                 print(f'Step {i:<5} | Loss = {loss.item():<10.6e} | Phases = {self.phases.detach().cpu().numpy().tolist()}')
         return self.phases.detach().cpu().numpy()
 
-    def predict(self) -> SuperWave:
+    def generate_predicted_wave(self) -> SuperWave:
         """
-        Predict the wave using the optimized phase parameter.
+        Generate a wave using the optimized phase parameter.
 
         Returns:
             SuperWave: The predicted wave as a SuperWave object.
