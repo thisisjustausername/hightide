@@ -356,7 +356,8 @@ class WaveCollection:
 def wave_series_to_imgs(
     wave_series: Tensor,
     scale: Literal['normalize'],
-    match_range: None
+    match_range: None,
+    coloured: bool = False
 ) -> list[Image.Image]:
     """Scale the wave to the range of (0, 255) with min -> 0, max -> 255."""
 
@@ -364,13 +365,17 @@ def wave_series_to_imgs(
 def wave_series_to_imgs(
     wave_series: Tensor,
     scale: Literal['cut'],
-    match_range: tuple[float, float]) -> list[Image.Image]:
+    match_range: tuple[float, float],
+    coloured: bool = False
+) -> list[Image.Image]:
     """Cut of the wave to the image. match_range[0] -> 0, match_range[1] -> 255."""
 
 def wave_series_to_imgs(
     wave_series: Tensor,
     scale: Literal['normalize', 'cut'],
-    match_range: tuple[float, float] | None) -> list[Image.Image]:
+    match_range: tuple[float, float] | None,
+    coloured: bool = False
+) -> list[Image.Image]:
     """
     Convert a wave series to an series of images.
 
@@ -378,7 +383,7 @@ def wave_series_to_imgs(
     Args:
         wave_series (Tensor): The wave series tensor to convert to an image.
         scale (Literal['normalize', 'cut')]: The scale to apply. Options are 'normalize' to scale the wave to a range of (0, 255) and 'cut' to scale the wave in the match_range to (0, 255) and cap the values outside to either 0 or 255.
-        match_range (tuple[float, float] | None): The range to scale the wave series in the match range. Needs to be supplied if and only if scale is set to 'cut'. Values inside the range are being scaled to (0, 255), values outside are capped to either 0 or 255.
+        match_range (tuple[float, float] | None): The range (min, max) to scale the wave series in the match range. Needs to be supplied if and only if scale is set to 'cut'. Values inside the range are being scaled to (0, 255), values outside are capped to either 0 or 255.
     Raises:
         ValueError: If an unsupported scale is provided or if match_range is provided with scale set to 'normalize' or not provided with scale set to 'cut'.
     Returns:
@@ -392,11 +397,13 @@ def wave_series_to_imgs(
     if scale == 'normalize':
         if match_range is not None:
             raise ValueError('Match range cannot be used together with scale = cut.')
-        img_wave = (img_wave - torch.min(img_wave)) / (torch.max(img_wave) - torch.min(img_wave)) * 255
+        img_wave = (img_wave - torch.min(img_wave)) / (torch.max(img_wave) - torch.min(img_wave)) * (255 if coloured is False else 1)
     elif scale == 'cut': # use elif for simple expansion of list
         if match_range is None:
             raise ValueError("match_range must be provided for scale 'cut'.")
-        img_wave = (img_wave - match_range[0]) / (match_range[1] - match_range[0]) * 255
+        img_wave = ((img_wave - match_range[0]) / (match_range[1] - match_range[0])).clamp(0, 1) * (255 if coloured is False else 1)
+    if coloured:
+        img_wave = torch.stack([img_wave, torch.zeros_like(img_wave), 1 - img_wave], dim=-1) * 255
     int8_wave_series = img_wave.to(torch.uint8)
     split_waves = [i.numpy() for i in torch.unbind(int8_wave_series, dim=0)]
     return [Image.fromarray(wave) for wave in split_waves]
